@@ -5,7 +5,7 @@ import {
   RadialLinearScale, Tooltip, Legend, Filler
 } from 'chart.js';
 import {
-  LS, PRESETS, COLORS, Q_FORMULAS, Q_LETTERS, L_DESCRIPTIONS
+  LS, PRESETS, COLORS, Q_FORMULAS, Q_LETTERS, L_DESCRIPTIONS, SYSTEM_SYMBOLS
 } from './config.js';
 import { solve } from './calc.js';
 
@@ -29,44 +29,91 @@ const SYSTEM_FORMULAS = [
   }
 ];
 
-function FormulasPanel() {
+function FormulasModal({ open, onClose }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
   return (
-    <section className="formulas-panel">
-      <div className="formulas-head">
-        <h2>Формулы модели</h2>
-        <p>Системная динамика · 15 показателей · 5 внешних возмущений</p>
-      </div>
-
-      <div className="formulas-grid">
-        <div className="formula-col">
-          <h3>Возмущения qᵢ(t)</h3>
-          {Object.entries(Q_FORMULAS).map(([key, f]) => (
-            <div className="formula-row" key={key}>
-              <div className="formula-math">{f.title}</div>
-              <div className="formula-meta">{f.desc}</div>
-            </div>
-          ))}
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Формулы модели"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <div>
+            <h2>Формулы модели</h2>
+            <p>Системная динамика · 15 показателей · 5 внешних возмущений</p>
+          </div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Закрыть">
+            ×
+          </button>
         </div>
 
-        <div className="formula-col">
-          <h3>Динамика показателей</h3>
-          {SYSTEM_FORMULAS.map((f, i) => (
-            <div className="formula-row" key={i}>
-              <div className="formula-math">{f.latex}</div>
-              <div className="formula-meta">{f.note}</div>
+        <div className="modal-body">
+          <div className="formulas-grid">
+            <div className="formula-col">
+              <h3>Возмущения qᵢ(t)</h3>
+              {Object.entries(Q_FORMULAS).map(([key, f]) => (
+                <div className="formula-row" key={key}>
+                  <div className="formula-math">{f.title}</div>
+                  <div className="formula-meta">{f.desc}</div>
+                  <dl className="formula-params">
+                    {Object.entries(f.params).map(([letter, meaning]) => (
+                      <div className="param-row" key={letter}>
+                        <dt>{letter}</dt>
+                        <dd>{meaning}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ))}
             </div>
-          ))}
+
+            <div className="formula-col">
+              <h3>Динамика показателей</h3>
+              {SYSTEM_FORMULAS.map((f, i) => (
+                <div className="formula-row" key={i}>
+                  <div className="formula-math">{f.latex}</div>
+                  <div className="formula-meta">{f.note}</div>
+                </div>
+              ))}
+
+              <h3 className="formula-subhead">Обозначения букв в формулах</h3>
+              <dl className="formula-params">
+                {SYSTEM_SYMBOLS.map(s => (
+                  <div className="param-row" key={s.sym}>
+                    <dt>{s.sym}</dt>
+                    <dd>{s.desc}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
+
+          <div className="formula-legend">
+            <h3 className="formula-subhead">Показатели Lᵢ</h3>
+            {LS.map(item => (
+              <span key={item.id} className="legend-chip">
+                <b>{item.id}</b> — {L_DESCRIPTIONS[item.id] || item.name}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
-
-      <div className="formula-legend">
-        {LS.map(item => (
-          <span key={item.id} className="legend-chip">
-            <b>{item.id}</b> — {L_DESCRIPTIONS[item.id] || item.name}
-          </span>
-        ))}
-      </div>
-    </section>
+    </div>
   );
 }
 
@@ -136,7 +183,7 @@ function Sidebar({
             </div>
             <div className="q-fields">
               {Q_LETTERS[key].map((letter, i) => (
-                <label className="mini-field" key={letter}>
+                <label className="mini-field" key={letter} title={Q_FORMULAS[key].params[letter]}>
                   <span>{letter}</span>
                   <input
                     type="number" step="0.1"
@@ -393,6 +440,7 @@ export default function App() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState({ text: '', cls: '' });
+  const [formulasOpen, setFormulasOpen] = useState(false);
 
   const runCalculate = useCallback(async () => {
     setLoading(true); setError(null);
@@ -432,9 +480,20 @@ export default function App() {
           <h1>Прогноз успешности<br />продуктовой компании</h1>
           <p>Модель системной динамики · 15 переменных · 5 возмущений</p>
         </div>
-        <div className={`header-status ${status.cls}`}>
-          <span className="status-dot" />
-          {status.text || 'ожидание'}
+        <div className="header-right">
+          <button
+            type="button"
+            className="info-btn"
+            onClick={() => setFormulasOpen(true)}
+            aria-label="Показать формулы модели"
+            title="Формулы модели"
+          >
+            !
+          </button>
+          <div className={`header-status ${status.cls}`}>
+            <span className="status-dot" />
+            {status.text || 'ожидание'}
+          </div>
         </div>
       </header>
 
@@ -469,7 +528,7 @@ export default function App() {
         </main>
       </div>
 
-      <FormulasPanel />
+      <FormulasModal open={formulasOpen} onClose={() => setFormulasOpen(false)} />
     </div>
   );
 }
